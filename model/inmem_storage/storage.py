@@ -1,9 +1,19 @@
 from model.serialization.model import Link
 
 
-class InMemStorage:
+class InMemLinkStorage:
     def __init__(self):
         self.links: list[dict] = []
+
+    def validate_link_id_uniqueness(self, link_id: str):
+        """
+        Validates that there is no links in the list with an ID value matching the provided link_id
+        :param link_id: target link_id to validate
+        :return: raises a ValueError exception when there is an entry in the links list with a matching ID
+        """
+        for link in self.links:
+            if str(link["id"]) == link_id:
+                raise ValueError("link id must be unique")
 
     def insert(self, link: Link):
         self.links.append(link.model_dump())
