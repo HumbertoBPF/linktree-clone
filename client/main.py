@@ -10,6 +10,8 @@ def get_links():
     response = requests.get(f"{BASE_URL}/links")
     print("Status code =", response.status_code, "response body =", response.json())
 
+    assert response.status_code == 200
+
 
 def create_link():
     # Successful request with ID
@@ -369,6 +371,126 @@ def create_user():
     assert response.status_code == 422
 
 
+def get_user():
+    # User is found
+    response = requests.get(f"{BASE_URL}/user/{USER_ID}")
+    print("Status code =", response.status_code, "response body =", response.json())
+
+    returned_user = response.json()
+
+    assert response.status_code == 200
+    assert "password" not in returned_user
+    assert returned_user["id"] == USER_ID
+    assert returned_user["first_name"] == "John"
+    assert returned_user["last_name"] == "Doe"
+    assert returned_user["email"] == "john.doe@test.com"
+
+    # User was not found
+    response = requests.get(f"{BASE_URL}/user/foo")
+    print("Status code =", response.status_code, "response body =", response.json())
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "error": "User not found"
+    }
+
+
+def put_user():
+    # Successful request with ID
+    payload = {
+        "first_name": "John 2",
+        "last_name": "Doe 2",
+        "email": "john.doe+3@test.com",
+    }
+    response = requests.put(f"{BASE_URL}/user/{USER_ID}", json=payload)
+    print("Status code =", response.status_code)
+    print("response body =", response.json())
+
+    # The ID is returned in the response body
+    payload["id"] = USER_ID
+
+    assert response.status_code == 200
+    assert response.json() == payload
+
+    # No op update
+    payload = {
+        "first_name": "John 2",
+        "last_name": "Doe 2",
+        "email": "john.doe+3@test.com",
+    }
+    response = requests.put(f"{BASE_URL}/user/{USER_ID}", json=payload)
+    print("Status code =", response.status_code)
+    print("response body =", response.json())
+
+    # The ID is returned in the response body
+    payload["id"] = USER_ID
+
+    assert response.status_code == 200
+    assert response.json() == payload
+
+    # Payload without first name
+    payload = {
+        "last_name": "Doe 2",
+        "email": "john.doe+3@test.com",
+    }
+    response = requests.put(f"{BASE_URL}/user/{USER_ID}", json=payload)
+    print("Status code =", response.status_code)
+    print("response body =", response.json())
+
+    assert response.status_code == 422
+
+    # Payload without last name
+    payload = {
+        "first_name": "John 2",
+        "email": "john.doe+3@test.com",
+    }
+    response = requests.put(f"{BASE_URL}/user/{USER_ID}", json=payload)
+    print("Status code =", response.status_code)
+    print("response body =", response.json())
+
+    assert response.status_code == 422
+
+    # Payload without email
+    payload = {
+        "first_name": "John 2",
+        "last_name": "Doe 2",
+    }
+    response = requests.put(f"{BASE_URL}/user/{USER_ID}", json=payload)
+    print("Status code =", response.status_code)
+    print("response body =", response.json())
+
+    assert response.status_code == 422
+
+    # Invalid email address
+    payload = {
+        "first_name": "John 2",
+        "last_name": "Doe 2",
+        "email": "john.doe+3",
+    }
+    response = requests.put(f"{BASE_URL}/user/{USER_ID}", json=payload)
+    print("Status code =", response.status_code)
+    print("response body =", response.json())
+
+    assert response.status_code == 422
+
+
+def delete_user():
+    # User is found
+    response = requests.delete(f"{BASE_URL}/user/{USER_ID}")
+    print("Status code =", response.status_code)
+
+    assert response.status_code == 204
+
+    # User was not found
+    response = requests.delete(f"{BASE_URL}/user/foo")
+    print("Status code =", response.status_code, "response body =", response.json())
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "error": "User not found"
+    }
+
+
 if __name__ == "__main__":
     # Restart the server before calling this function
 
@@ -380,3 +502,6 @@ if __name__ == "__main__":
 
     # User APIs
     create_user()
+    get_user()
+    put_user()
+    delete_user()

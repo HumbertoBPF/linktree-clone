@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Response, status
 
 from model.inmem_storage.storage import InMemLinkStorage, InMemUserStorage
-from model.serialization.model import Link, SignupUser
+from model.serialization.model import Link, SignupUser, User
 
 app = FastAPI()
 
@@ -46,15 +46,26 @@ def update_link(link: Link, link_id: str, response: Response):
 def delete_link(link_id: str, response: Response):
     if link_storage.delete(link_id):
         return None
+
     response.status_code = status.HTTP_404_NOT_FOUND
     return {
         "error": "Link not found"
     }
 
 
-@app.get("/user")
-def get_user():
-    return {}
+@app.get("/user/{user_id}")
+def get_user(user_id: str, response: Response):
+    user = user_storage.lookup_by_id(user_id)
+
+    if user is None:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {
+            "error": "User not found"
+        }
+
+    # Remove the password from the returned user since this is sensible information
+    del user["password"]
+    return user
 
 
 @app.post("/signup", status_code=status.HTTP_201_CREATED)
@@ -73,11 +84,53 @@ def create_user(user: SignupUser, response: Response):
     return user_without_password
 
 
-@app.put("/user")
-def put_user():
-    return {}
+@app.put("/user/{user_id}")
+def put_user(user_id: str, user: User, response: Response):
+    existing_user = user_storage.lookup_by_id(user_id)
+
+    if existing_user is None:
+        response.status_code = status.HTTP_404_NOT_FOUND
+        return {
+            "error": "User not found"
+        }
+
+    # No need to validate email uniqueness if the email is kept the same
+    if existing_user["email"] != user.email:
+        try:
+            user_storage.validate_email_uniqueness_constraint(user)
+        except ValueError as e:
+            response.status_code = status.HTTP_409_CONFLICT
+            return {
+                "error": str(e)
+            }
+
+    # No-op if the users have the same fields
+    if (
+            (existing_user["first_name"] == user.first_name) and
+            (existing_user["last_name"] == user.last_name) and
+            (existing_user["email"] == user.email)
+    ):
+        updated_user = user.model_dump()
+        updated_user["id"] = user_id
+        return updated_user
+
+    if user_storage.update(user, user_id):
+        updated_user = user.model_dump()
+        updated_user["id"] = user_id
+        return updated_user
+
+    response.status_code = status.HTTP_404_NOT_FOUND
+    return {
+        "error": "User not found"
+    }
 
 
-@app.delete("/user")
-def delete_user():
-    return {}
+@app.delete("/user/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(user_id: str, response: Response):
+    if user_storage.delete(user_id):
+        return None
+
+    response.status_code = status.HTTP_404_NOT_FOUND
+    return {
+        "error": "User not found"
+    }
