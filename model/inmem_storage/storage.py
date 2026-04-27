@@ -1,4 +1,40 @@
-from model.serialization.model import Link
+from pwdlib import PasswordHash
+
+from model.serialization.model import Link, User, SignupUser
+
+
+class InMemUserStorage:
+    def __init__(self):
+        self.users: list[dict] = []
+        self.password_hash = PasswordHash.recommended()
+
+    def __verify_password(self, plain_password, hashed_password):
+        return self.password_hash.verify(plain_password, hashed_password)
+
+    def __get_password_hash(self, password):
+        return self.password_hash.hash(password)
+
+    def validate_user_uniqueness_constraints(self, user: User):
+        """
+        Validates that there is no users in the list with an ID or email value matching the provided user instance
+        :param user: target user instance
+        :return: raises a ValueError exception when there is an entry in the users list with a field violating the
+        uniqueness constraints
+        """
+        for db_user in self.users:
+            # Validate user ID uniqueness
+            if str(db_user["id"]) == str(user.id):
+                raise ValueError("user id must be unique")
+
+            # Validate user email uniqueness
+            if db_user["email"] == user.email:
+                raise ValueError("user email must be unique")
+
+    def insert(self, user: SignupUser):
+        user_dict = user.model_dump()
+        # Hash password before inserting into the database
+        user_dict["password"] = self.__get_password_hash(user_dict["password"])
+        self.users.append(user_dict)
 
 
 class InMemLinkStorage:

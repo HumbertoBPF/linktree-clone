@@ -1,11 +1,12 @@
 from fastapi import FastAPI, Response, status
 
-from model.inmem_storage.storage import InMemLinkStorage
+from model.inmem_storage.storage import InMemLinkStorage, InMemUserStorage
 from model.serialization.model import Link, SignupUser
 
 app = FastAPI()
 
 link_storage = InMemLinkStorage()
+user_storage = InMemUserStorage()
 
 
 @app.get("/links")
@@ -49,3 +50,34 @@ def delete_link(link_id: str, response: Response):
     return {
         "error": "Link not found"
     }
+
+
+@app.get("/user")
+def get_user():
+    return {}
+
+
+@app.post("/signup", status_code=status.HTTP_201_CREATED)
+def create_user(user: SignupUser, response: Response):
+    try:
+        user_storage.validate_user_uniqueness_constraints(user)
+    except ValueError as e:
+        response.status_code = status.HTTP_409_CONFLICT
+        return {
+            "error": str(e)
+        }
+
+    user_storage.insert(user)
+    user_without_password = user.model_dump()
+    del user_without_password["password"]
+    return user_without_password
+
+
+@app.put("/user")
+def put_user():
+    return {}
+
+
+@app.delete("/user")
+def delete_user():
+    return {}
