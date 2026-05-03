@@ -24,6 +24,13 @@ class InMemSessionStorage:
             if str(db_session["id"]) == str(session_id):
                 raise ValueError("session id must be unique")
 
+    def lookup_by_id(self, session_id: str) -> dict | None:
+        for session in self.sessions:
+            if str(session.get("id")) == session_id:
+                return session
+
+        return None
+
     def insert(self, user_id: str) -> UUID:
         session_id = uuid4()
 
@@ -167,38 +174,52 @@ class InMemLinkStorage:
             if str(link["id"]) == link_id:
                 raise ValueError("link id must be unique")
 
-    def insert(self, link: Link):
-        self.links.append(link.model_dump())
+    def lookup_by_user_id(self, user_id: str) -> list[dict]:
+        links_owned_by_user = []
 
-    def update(self, link: Link, link_id: str) -> bool:
+        for link in self.links:
+            if str(link["user_id"]) == user_id:
+                links_owned_by_user.append(link.copy())
+
+        return links_owned_by_user
+
+    def insert(self, link: Link, user_id: str):
+        link_dict = link.model_dump()
+        link_dict["user_id"] = user_id
+        self.links.append(link_dict)
+
+    def update(self, link: Link, link_id: str, user_id: str) -> bool:
         """
         Update the link in the list matching the provided ID.
         :param link: new representation of the link.
         :param link_id: ID of the link to be updated.
+        :param user_id: ID of the user that owns the link.
         :return: if an item with a matching ID was found in the list.
         """
         n = len(self.links)
 
         for i in range(n):
-            if str(self.links[i].get("id")) == link_id:
+            if (str(self.links[i].get("id")) == link_id) and (str(self.links[i].get("user_id")) == user_id):
                 link_dict = link.model_dump()
                 # The ID must not be modified post-creation since it is typically a read-only field
                 link_dict["id"] = self.links[i].get("id")
+                link_dict["user_id"] = self.links[i].get("user_id")
                 self.links[i] = link_dict
                 return True
 
         return False
 
-    def delete(self, link_id: str) -> bool:
+    def delete(self, link_id: str, user_id: str) -> bool:
         """
-        Deletes the item with the matching ID from the list.
-        :param link_id: target link ID
+        Deletes the item with the matching ID from the li
+        :param link_id: target link IDst.
+        :param user_id: ID of the user that owns the link.
         :return: a boolean indicating if an item with the target ID was found
         """
         n = len(self.links)
 
         for i in range(n):
-            if str(self.links[i].get("id")) == link_id:
+            if (str(self.links[i].get("id")) == link_id) and (str(self.links[i].get("user_id")) == user_id):
                 del self.links[i]
                 return True
 

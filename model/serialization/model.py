@@ -11,7 +11,6 @@ class Link(BaseModel):
     name: str
     url: str
     description: str | None = None
-    user_id: UUID
 
 
 class User(BaseModel):

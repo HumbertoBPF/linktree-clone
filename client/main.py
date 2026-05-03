@@ -3,11 +3,76 @@ import requests
 
 BASE_URL = "http://127.0.0.1:8000"
 LINK_ID = "0c22b3d2-c321-465a-8656-a95d7fd6a096"
-USER_ID = "0c22b3d2-c321-465a-8656-a95d7fd6a096"
+
+USER_1_ID = "0c22b3d2-c321-465a-8656-a95d7fd6a096"
+FIRST_NAME_USER_1 = "John"
+LAST_NAME_USER_1 = "Doe"
+EMAIL_USER_1 = "john.doe@test.com"
+PASSWORD_USER_1 = "Str0ngP@ss"
+
+# User 2 will be updated
+USER_2_ID = "0c22b3d2-c321-465a-8656-a95d7fd6a095"
+FIRST_NAME_USER_2 = "John"
+LAST_NAME_USER_2 = "Doe"
+EMAIL_USER_2 = "john.doe+2@test.com"
+PASSWORD_USER_2 = "Str0ngP@ss"
+
+# User 3 will be deleted
+USER_3_ID = "0c22b3d2-c321-465a-8656-a95d7fd6a094"
+FIRST_NAME_USER_3 = "John"
+LAST_NAME_USER_3 = "Doe"
+EMAIL_USER_3 = "john.doe+3@test.com"
+PASSWORD_USER_3 = "Str0ngP@ss"
+
+# User 4 will be deleted
+FIRST_NAME_USER_4 = "John"
+LAST_NAME_USER_4 = "Doe"
+EMAIL_USER_4 = "john.doe+4@test.com"
+PASSWORD_USER_4 = "Str0ngP@ss"
+
+
+def get_user_1_sid():
+    payload = {
+        "username": EMAIL_USER_1,
+        "password": PASSWORD_USER_1
+    }
+    response = requests.post(f"{BASE_URL}/login", data=payload)
+
+    assert response.status_code == 200
+
+    return response.json()["sid"]
+
+
+def get_user_2_sid():
+    """This will no longer work after the user 2 is updated (the email will no longer be the same)"""
+    payload = {
+        "username": EMAIL_USER_2,
+        "password": PASSWORD_USER_2
+    }
+    response = requests.post(f"{BASE_URL}/login", data=payload)
+
+    assert response.status_code == 200
+
+    return response.json()["sid"]
+
+
+def get_user_3_sid():
+    """This will no longer work after the user 3 is deleted"""
+    payload = {
+        "username": EMAIL_USER_3,
+        "password": PASSWORD_USER_3
+    }
+    response = requests.post(f"{BASE_URL}/login", data=payload)
+
+    assert response.status_code == 200
+
+    return response.json()["sid"]
 
 
 def get_links():
-    response = requests.get(f"{BASE_URL}/links")
+    response = requests.get(f"{BASE_URL}/links", headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code, "response body =", response.json())
 
     assert response.status_code == 200
@@ -19,12 +84,16 @@ def create_link():
         "id": LINK_ID,
         "name": "Medium",
         "url": "https://medium.com/@humbertofilho_30158",
-        "description": "My Medium blog, where I write programming-related articles and tutorials",
-        "user_id": "d30964d7-d92c-4671-b016-e334fedb318c"
+        "description": "My Medium blog, where I write programming-related articles and tutorials"
     }
-    response = requests.post(f"{BASE_URL}/link", json=payload)
+    response = requests.post(f"{BASE_URL}/link", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code)
     print("response body =", response.json())
+
+    # The response contains the owner user ID
+    payload["user_id"] = USER_1_ID
 
     assert response.status_code == 201
     assert response.json() == payload
@@ -33,12 +102,16 @@ def create_link():
     payload = {
         "name": "Medium",
         "url": "https://medium.com/@humbertofilho_30158",
-        "description": "My Medium blog, where I write programming-related articles and tutorials",
-        "user_id": "d30964d7-d92c-4671-b016-e334fedb318c"
+        "description": "My Medium blog, where I write programming-related articles and tutorials"
     }
-    response = requests.post(f"{BASE_URL}/link", json=payload)
+    response = requests.post(f"{BASE_URL}/link", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code)
     print("response body =", response.json())
+
+    # The response contains the owner user ID
+    payload["user_id"] = USER_1_ID
 
     assert response.status_code == 201
     assert response.json()["id"]
@@ -52,24 +125,11 @@ def create_link():
         "id": "0c22b3d2-c321-465a-8656-a95d7fd6a06",
         "name": "Medium",
         "url": "https://medium.com/@humbertofilho_30158",
-        "description": "My Medium blog, where I write programming-related articles and tutorials",
-        "user_id": "d30964d7-d92c-4671-b016-e334fedb318c"
+        "description": "My Medium blog, where I write programming-related articles and tutorials"
     }
-    response = requests.post(f"{BASE_URL}/link", json=payload)
-    print("Status code =", response.status_code)
-    print("response body =", response.json())
-
-    assert response.status_code == 422
-
-    # Invalid user id (not a UUID)
-    payload = {
-        "id": LINK_ID,
-        "name": "Medium",
-        "url": "https://medium.com/@humbertofilho_30158",
-        "description": "My Medium blog, where I write programming-related articles and tutorials",
-        "user_id": "d30964d7-d92c-4671-b016-e334fedb31c"
-    }
-    response = requests.post(f"{BASE_URL}/link", json=payload)
+    response = requests.post(f"{BASE_URL}/link", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code)
     print("response body =", response.json())
 
@@ -79,10 +139,11 @@ def create_link():
     payload = {
         "id": LINK_ID,
         "url": "https://medium.com/@humbertofilho_30158",
-        "description": "My Medium blog, where I write programming-related articles and tutorials",
-        "user_id": "d30964d7-d92c-4671-b016-e334fedb318c"
+        "description": "My Medium blog, where I write programming-related articles and tutorials"
     }
-    response = requests.post(f"{BASE_URL}/link", json=payload)
+    response = requests.post(f"{BASE_URL}/link", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code)
     print("response body =", response.json())
 
@@ -93,10 +154,11 @@ def create_link():
         "id": LINK_ID,
         "name": "Medium",
         "url": "https://medium.com/@humbertofilho_30158",
-        "description": "My Medium blog, where I write programming-related articles and tutorials",
-        "user_id": "d30964d7-d92c-4671-b016-e334fedb318c"
+        "description": "My Medium blog, where I write programming-related articles and tutorials"
     }
-    response = requests.post(f"{BASE_URL}/link", json=payload)
+    response = requests.post(f"{BASE_URL}/link", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code)
     print("response body =", response.json())
 
@@ -112,12 +174,16 @@ def put_link():
         "id": LINK_ID,
         "name": "Medium (updated)",
         "url": "https://medium.com/@humbertofilho_30158",
-        "description": "My Medium blog, where I write programming-related articles and tutorials",
-        "user_id": "d30964d7-d92c-4671-b016-e334fedb318c"
+        "description": "My Medium blog, where I write programming-related articles and tutorials"
     }
 
-    response = requests.put(f"{BASE_URL}/link/{LINK_ID}", json=payload)
+    response = requests.put(f"{BASE_URL}/link/{LINK_ID}", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code, "response body =", response.json())
+
+    # The response contains the owner user ID
+    payload["user_id"] = USER_1_ID
 
     assert response.status_code == 200
     assert response.json() == payload
@@ -127,11 +193,12 @@ def put_link():
         "id": LINK_ID,
         "name": "Medium (updated)",
         "url": "https://medium.com/@humbertofilho_30158",
-        "description": "My Medium blog, where I write programming-related articles and tutorials",
-        "user_id": "d30964d7-d92c-4671-b016-e334fedb318c"
+        "description": "My Medium blog, where I write programming-related articles and tutorials"
     }
 
-    response = requests.put(f"{BASE_URL}/link/foo", json=payload)
+    response = requests.put(f"{BASE_URL}/link/foo", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code, "response body =", response.json())
 
     assert response.status_code == 404
@@ -141,12 +208,16 @@ def put_link():
 
 
 def delete_link():
-    response = requests.delete(f"{BASE_URL}/link/{LINK_ID}")
+    response = requests.delete(f"{BASE_URL}/link/{LINK_ID}", headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code)
 
     assert response.status_code == 204
 
-    response = requests.delete(f"{BASE_URL}/link/{LINK_ID}")
+    response = requests.delete(f"{BASE_URL}/link/{LINK_ID}", headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code, "response body =", response.json())
 
     assert response.status_code == 404
@@ -156,13 +227,44 @@ def delete_link():
 
 
 def create_user():
-    # Successful request with ID
+    # First successful request with ID
     payload = {
-        "id": USER_ID,
-        "first_name": "John",
-        "last_name": "Doe",
-        "email": "john.doe@test.com",
-        "password": "Str0ngP@ss",
+        "id": USER_1_ID,
+        "first_name": FIRST_NAME_USER_1,
+        "last_name": LAST_NAME_USER_1,
+        "email": EMAIL_USER_1,
+        "password": PASSWORD_USER_1,
+    }
+    response = requests.post(f"{BASE_URL}/signup", json=payload)
+    print("Status code =", response.status_code)
+    print("response body =", response.json())
+
+    # Second successful request with ID
+    payload = {
+        "id": USER_2_ID,
+        "first_name": FIRST_NAME_USER_2,
+        "last_name": LAST_NAME_USER_2,
+        "email": EMAIL_USER_2,
+        "password": PASSWORD_USER_2,
+    }
+    response = requests.post(f"{BASE_URL}/signup", json=payload)
+    print("Status code =", response.status_code)
+    print("response body =", response.json())
+
+    # Drop password for validation purposes since it must not be returned in the response
+    payload_without_password = payload
+    del payload_without_password["password"]
+
+    assert response.status_code == 201
+    assert response.json() == payload
+
+    # Third successful request with ID
+    payload = {
+        "id": USER_3_ID,
+        "first_name": FIRST_NAME_USER_3,
+        "last_name": LAST_NAME_USER_3,
+        "email": EMAIL_USER_3,
+        "password": PASSWORD_USER_3,
     }
     response = requests.post(f"{BASE_URL}/signup", json=payload)
     print("Status code =", response.status_code)
@@ -177,10 +279,10 @@ def create_user():
 
     # Successful request without ID
     payload = {
-        "first_name": "John",
-        "last_name": "Doe",
-        "email": "john.doe+2@test.com",
-        "password": "Str0ngP@ss",
+        "first_name": FIRST_NAME_USER_4,
+        "last_name": LAST_NAME_USER_4,
+        "email": EMAIL_USER_4,
+        "password": PASSWORD_USER_4,
     }
     response = requests.post(f"{BASE_URL}/signup", json=payload)
     print("Status code =", response.status_code)
@@ -200,7 +302,7 @@ def create_user():
 
     # Request with duplicated user ID
     payload = {
-        "id": USER_ID,
+        "id": USER_1_ID,
         "first_name": "John",
         "last_name": "Doe",
         "email": "john.doe+3@test.com",
@@ -219,7 +321,7 @@ def create_user():
     payload = {
         "first_name": "John",
         "last_name": "Doe",
-        "email": "john.doe@test.com",
+        "email": EMAIL_USER_1,
         "password": "Str0ngP@ss",
     }
     response = requests.post(f"{BASE_URL}/signup", json=payload)
@@ -373,57 +475,62 @@ def create_user():
 
 def get_user():
     # User is found
-    response = requests.get(f"{BASE_URL}/user/{USER_ID}")
+    headers = {
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    }
+
+    response = requests.get(f"{BASE_URL}/user", headers=headers)
     print("Status code =", response.status_code, "response body =", response.json())
 
     returned_user = response.json()
 
     assert response.status_code == 200
     assert "password" not in returned_user
-    assert returned_user["id"] == USER_ID
+    assert returned_user["id"] == USER_1_ID
     assert returned_user["first_name"] == "John"
     assert returned_user["last_name"] == "Doe"
     assert returned_user["email"] == "john.doe@test.com"
 
-    # User was not found
-    response = requests.get(f"{BASE_URL}/user/foo")
+    # No authorization header
+    response = requests.get(f"{BASE_URL}/user")
     print("Status code =", response.status_code, "response body =", response.json())
 
-    assert response.status_code == 404
-    assert response.json() == {
-        "error": "User not found"
-    }
+    assert response.status_code == 401
 
 
 def put_user():
-    # Successful request with ID
+    # Successful request
     payload = {
         "first_name": "John 2",
         "last_name": "Doe 2",
-        "email": "john.doe+3@test.com",
+        "email": "john.doe+200@test.com",
     }
-    response = requests.put(f"{BASE_URL}/user/{USER_ID}", json=payload)
+    response = requests.put(f"{BASE_URL}/user", json=payload, headers={
+        "Authorization": f"Bearer {get_user_2_sid()}"
+    })
     print("Status code =", response.status_code)
     print("response body =", response.json())
 
     # The ID is returned in the response body
-    payload["id"] = USER_ID
+    payload["id"] = USER_2_ID
 
     assert response.status_code == 200
     assert response.json() == payload
 
     # No op update
     payload = {
-        "first_name": "John 2",
-        "last_name": "Doe 2",
-        "email": "john.doe+3@test.com",
+        "first_name": "John",
+        "last_name": "Doe",
+        "email": "john.doe@test.com",
     }
-    response = requests.put(f"{BASE_URL}/user/{USER_ID}", json=payload)
+    response = requests.put(f"{BASE_URL}/user", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code)
     print("response body =", response.json())
 
     # The ID is returned in the response body
-    payload["id"] = USER_ID
+    payload["id"] = USER_1_ID
 
     assert response.status_code == 200
     assert response.json() == payload
@@ -431,9 +538,11 @@ def put_user():
     # Payload without first name
     payload = {
         "last_name": "Doe 2",
-        "email": "john.doe+3@test.com",
+        "email": "john.doe+4@test.com",
     }
-    response = requests.put(f"{BASE_URL}/user/{USER_ID}", json=payload)
+    response = requests.put(f"{BASE_URL}/user", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code)
     print("response body =", response.json())
 
@@ -442,9 +551,11 @@ def put_user():
     # Payload without last name
     payload = {
         "first_name": "John 2",
-        "email": "john.doe+3@test.com",
+        "email": "john.doe+4@test.com",
     }
-    response = requests.put(f"{BASE_URL}/user/{USER_ID}", json=payload)
+    response = requests.put(f"{BASE_URL}/user", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code)
     print("response body =", response.json())
 
@@ -455,7 +566,9 @@ def put_user():
         "first_name": "John 2",
         "last_name": "Doe 2",
     }
-    response = requests.put(f"{BASE_URL}/user/{USER_ID}", json=payload)
+    response = requests.put(f"{BASE_URL}/user", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code)
     print("response body =", response.json())
 
@@ -465,9 +578,11 @@ def put_user():
     payload = {
         "first_name": "John 2",
         "last_name": "Doe 2",
-        "email": "john.doe+3",
+        "email": "john.doe+4",
     }
-    response = requests.put(f"{BASE_URL}/user/{USER_ID}", json=payload)
+    response = requests.put(f"{BASE_URL}/user", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
     print("Status code =", response.status_code)
     print("response body =", response.json())
 
@@ -475,46 +590,32 @@ def put_user():
 
 
 def delete_user():
+    # User not authenticated
+    response = requests.delete(f"{BASE_URL}/user")
+    print("Status code =", response.status_code, "response body =", response.json())
+
+    assert response.status_code == 401
+
     # User is found
-    response = requests.delete(f"{BASE_URL}/user/{USER_ID}")
+    response = requests.delete(f"{BASE_URL}/user", headers={
+        "Authorization": f"Bearer {get_user_3_sid()}"
+    })
     print("Status code =", response.status_code)
 
     assert response.status_code == 204
 
-    # User was not found
-    response = requests.delete(f"{BASE_URL}/user/foo")
-    print("Status code =", response.status_code, "response body =", response.json())
-
-    assert response.status_code == 404
-    assert response.json() == {
-        "error": "User not found"
-    }
-
-
-def get_user_sid():
-    payload = {
-        "username": "john.doe@test.com",
-        "password": "Str0ngP@ss"
-    }
-    response = requests.post(f"{BASE_URL}/login", data=payload)
-
-    assert response.status_code == 200
-
-    return response.json()["sid"]
-
 
 if __name__ == "__main__":
     # Restart the server before calling this function
+
+    # User APIs
+    create_user()
+    get_user()
+    put_user()
+    delete_user()
 
     # Link APIs
     get_links()
     create_link()
     put_link()
     delete_link()
-
-    # User APIs
-    create_user()
-    print("sid =", get_user_sid())
-    get_user()
-    put_user()
-    delete_user()

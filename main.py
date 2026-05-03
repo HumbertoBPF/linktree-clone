@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import FastAPI, Response, status, Depends, HTTPException
@@ -13,6 +14,27 @@ app = FastAPI()
 link_storage = InMemLinkStorage()
 user_storage = InMemUserStorage()
 session_storage = InMemSessionStorage()
+
+
+def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+    session = session_storage.lookup_by_id(token)
+    if not session or (session["expires_at"] <= datetime.now()):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = user_storage.lookup_by_id(str(session["user_id"]))
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return user
 
 
 def authenticate_user(username: str, password: str) -> dict | None:
@@ -42,12 +64,12 @@ def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
 
 
 @app.get("/links")
-def get_links():
-    return {"links": link_storage.links}
+def get_links(user: Annotated[dict, Depends(get_current_user)]):
+    return {"links": link_storage.lookup_by_user_id(user_id=str(user["id"]))}
 
 
 @app.post("/link", status_code=status.HTTP_201_CREATED)
-def create_link(link: Link, response: Response):
+def create_link(user: Annotated[dict, Depends(get_current_user)], link: Link, response: Response):
     try:
         link_storage.validate_link_id_uniqueness(str(link.id))
     except ValueError as e:
@@ -58,14 +80,16 @@ def create_link(link: Link, response: Response):
 
     # Format to dict and insert it to the in-memory storage
     link_dict = link.model_dump()
-    link_storage.insert(link)
+    link_storage.insert(link=link, user_id=str(user["id"]))
+    link_dict["user_id"] = str(user["id"])
     return link_dict
 
 
 @app.put("/link/{link_id}")
-def update_link(link: Link, link_id: str, response: Response):
+def update_link(user: Annotated[dict, Depends(get_current_user)], link: Link, link_id: str, response: Response):
     link_dict = link.model_dump()
-    if link_storage.update(link, link_id):
+    if link_storage.update(link=link, link_id=link_id, user_id=str(user["id"])):
+        link_dict["user_id"] = str(user["id"])
         return link_dict
 
     response.status_code = status.HTTP_404_NOT_FOUND
@@ -75,8 +99,8 @@ def update_link(link: Link, link_id: str, response: Response):
 
 
 @app.delete("/link/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_link(link_id: str, response: Response):
-    if link_storage.delete(link_id):
+def delete_link(user: Annotated[dict, Depends(get_current_user)], link_id: str, response: Response):
+    if link_storage.delete(link_id=link_id, user_id=str(user["id"])):
         return None
 
     response.status_code = status.HTTP_404_NOT_FOUND
@@ -85,10 +109,8 @@ def delete_link(link_id: str, response: Response):
     }
 
 
-@app.get("/user/{user_id}")
-def get_user(user_id: str, response: Response):
-    user = user_storage.lookup_by_id(user_id)
-
+@app.get("/user")
+def get_user(user: Annotated[dict, Depends(get_current_user)], response: Response):
     if user is None:
         response.status_code = status.HTTP_404_NOT_FOUND
         return {
@@ -116,16 +138,8 @@ def create_user(user: SignupUser, response: Response):
     return user_without_password
 
 
-@app.put("/user/{user_id}")
-def put_user(user_id: str, user: User, response: Response):
-    existing_user = user_storage.lookup_by_id(user_id)
-
-    if existing_user is None:
-        response.status_code = status.HTTP_404_NOT_FOUND
-        return {
-            "error": "User not found"
-        }
-
+@app.put("/user")
+def put_user(existing_user: Annotated[dict, Depends(get_current_user)], user: User, response: Response):
     # No need to validate email uniqueness if the email is kept the same
     if existing_user["email"] != user.email:
         try:
@@ -138,17 +152,17 @@ def put_user(user_id: str, user: User, response: Response):
 
     # No-op if the users have the same fields
     if (
-            (existing_user["first_name"] == user.first_name) and
-            (existing_user["last_name"] == user.last_name) and
-            (existing_user["email"] == user.email)
+        (existing_user["first_name"] == user.first_name) and
+        (existing_user["last_name"] == user.last_name) and
+        (existing_user["email"] == user.email)
     ):
         updated_user = user.model_dump()
-        updated_user["id"] = user_id
+        updated_user["id"] = existing_user["id"]
         return updated_user
 
-    if user_storage.update(user, user_id):
+    if user_storage.update(user, str(existing_user["id"])):
         updated_user = user.model_dump()
-        updated_user["id"] = user_id
+        updated_user["id"] = existing_user["id"]
         return updated_user
 
     response.status_code = status.HTTP_404_NOT_FOUND
@@ -157,9 +171,9 @@ def put_user(user_id: str, user: User, response: Response):
     }
 
 
-@app.delete("/user/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(user_id: str, response: Response):
-    if user_storage.delete(user_id):
+@app.delete("/user", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(user: Annotated[dict, Depends(get_current_user)], response: Response):
+    if user_storage.delete(str(user["id"])):
         return None
 
     response.status_code = status.HTTP_404_NOT_FOUND
