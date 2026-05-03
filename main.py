@@ -1,12 +1,44 @@
-from fastapi import FastAPI, Response, status
+from typing import Annotated
 
-from model.inmem_storage.storage import InMemLinkStorage, InMemUserStorage
+from fastapi import FastAPI, Response, status, Depends, HTTPException
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+
+from model.inmem_storage.storage import InMemLinkStorage, InMemUserStorage, InMemSessionStorage
 from model.serialization.model import Link, SignupUser, User
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 app = FastAPI()
 
 link_storage = InMemLinkStorage()
 user_storage = InMemUserStorage()
+session_storage = InMemSessionStorage()
+
+
+def authenticate_user(username: str, password: str) -> dict | None:
+    user = user_storage.lookup_by_email(username)
+    if not user:
+        return None
+
+    if user_storage.verify_password(password, user["password"]):
+        return user
+
+    return None
+
+
+@app.post("/login")
+def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+    user = authenticate_user(form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    session_id = session_storage.insert(user["id"])
+    return {
+        "sid": session_id
+    }
 
 
 @app.get("/links")

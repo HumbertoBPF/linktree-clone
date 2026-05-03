@@ -1,6 +1,44 @@
+from datetime import datetime, timedelta
+
 from pwdlib import PasswordHash
 
 from model.serialization.model import Link, User, SignupUser
+from uuid import uuid4, UUID
+
+SESSION_EXPIRATION_MINUTES = 60
+
+
+class InMemSessionStorage:
+    def __init__(self):
+        self.sessions: list[dict] = []
+
+    def __validate_session_id_uniqueness_constraint(self, session_id: UUID):
+        """
+        Validates that there is no sessions in the list with an ID value matching the provided session_id
+        :param session_id: session ID under validation
+        :return: raises a ValueError exception when there is an entry in the session list with a field violating the
+        uniqueness constraints
+        """
+        for db_session in self.sessions:
+            # Validate session ID uniqueness
+            if str(db_session["id"]) == str(session_id):
+                raise ValueError("session id must be unique")
+
+    def insert(self, user_id: str) -> UUID:
+        session_id = uuid4()
+
+        self.__validate_session_id_uniqueness_constraint(session_id)
+
+        created_at = datetime.now()
+
+        self.sessions.append({
+            "id": session_id,
+            "user_id": user_id,
+            "created_at": created_at,
+            "expires_at": created_at + timedelta(minutes=SESSION_EXPIRATION_MINUTES),
+        })
+
+        return session_id
 
 
 class InMemUserStorage:
@@ -8,7 +46,7 @@ class InMemUserStorage:
         self.users: list[dict] = []
         self.password_hash = PasswordHash.recommended()
 
-    def __verify_password(self, plain_password, hashed_password):
+    def verify_password(self, plain_password, hashed_password):
         return self.password_hash.verify(plain_password, hashed_password)
 
     def __get_password_hash(self, password):
@@ -48,6 +86,18 @@ class InMemUserStorage:
         self.validate_id_uniqueness_constraint(user)
         self.validate_email_uniqueness_constraint(user)
 
+    def lookup_by_email(self, email: str) -> dict | None:
+        """
+        Searches for a user with the provided email.
+        :param email: target email
+        :return: returns the user with a matching email or None if there is no such a user
+        """
+        for user in self.users:
+            if user.get("email") == email:
+                return user.copy()
+
+        return None
+
     def lookup_by_id(self, user_id: str) -> dict | None:
         """
         Searches for a user with the provided ID.
@@ -56,7 +106,7 @@ class InMemUserStorage:
         """
         for user in self.users:
             if str(user.get("id")) == user_id:
-                return user
+                return user.copy()
 
         return None
 

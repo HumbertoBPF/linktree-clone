@@ -491,6 +491,18 @@ def delete_user():
     }
 
 
+def get_user_sid():
+    payload = {
+        "username": "john.doe@test.com",
+        "password": "Str0ngP@ss"
+    }
+    response = requests.post(f"{BASE_URL}/login", data=payload)
+
+    assert response.status_code == 200
+
+    return response.json()["sid"]
+
+
 if __name__ == "__main__":
     # Restart the server before calling this function
 
@@ -502,6 +514,7 @@ if __name__ == "__main__":
 
     # User APIs
     create_user()
+    print("sid =", get_user_sid())
     get_user()
     put_user()
     delete_user()
