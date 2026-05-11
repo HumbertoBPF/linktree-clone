@@ -63,6 +63,11 @@ def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
     }
 
 
+@app.get("/health")
+def health():
+    return {"name": "linktree-clone"}
+
+
 @app.get("/links")
 def get_links(user: Annotated[dict, Depends(get_current_user)]):
     return {"links": link_storage.lookup_by_user_id(user_id=str(user["id"]))}
