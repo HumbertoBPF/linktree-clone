@@ -1,56 +1,91 @@
+import os
 from datetime import datetime, timedelta
-
-from pwdlib import PasswordHash
-
-from model.serialization.model import Link, User, SignupUser
+from typing import Annotated
 from uuid import uuid4, UUID
+
+from dotenv import load_dotenv
+from fastapi import Depends
+from pwdlib import PasswordHash
+from sqlalchemy import create_engine
+from sqlalchemy.exc import NoResultFound
+from sqlmodel import Session, select
+
+from exceptions.exceptions import UniquenessError
+from model.serialization.model import Link, User, SignupUser, UserBase, LinkBase, AuthSession
 
 SESSION_EXPIRATION_MINUTES = 60
 
+# Injects the .env file values into os.environ
+load_dotenv()
+
+# Access them normally
+MYSQL_USERNAME = os.getenv("MYSQL_USERNAME")
+MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
+MYSQL_IP_ADDRESS = os.getenv("MYSQL_IP_ADDRESS")
+MYSQL_PORT = os.getenv("MYSQL_PORT")
+MYSQL_DATABASE_NAME = os.getenv("MYSQL_DATABASE_NAME")
+
+mysql_url = f"mysql+pymysql://{MYSQL_USERNAME}:{MYSQL_PASSWORD}@{MYSQL_IP_ADDRESS}:{MYSQL_PORT}/{MYSQL_DATABASE_NAME}"
+
+engine = create_engine(mysql_url)
+
+
+def get_db_session():
+    with Session(engine) as db_session:
+        yield db_session
+
+
+# For dependency injection in the application layer
+DbSessionDep = Annotated[Session, Depends(get_db_session)]
+
 
 class InMemSessionStorage:
-    def __init__(self):
-        self.sessions: list[dict] = []
-
-    def __validate_session_id_uniqueness_constraint(self, session_id: UUID):
+    def __validate_session_id_uniqueness_constraint(self, db_session: DbSessionDep, session_id: UUID):
         """
         Validates that there is no sessions in the list with an ID value matching the provided session_id
+        :param db_session: database session object
         :param session_id: session ID under validation
-        :return: raises a ValueError exception when there is an entry in the session list with a field violating the
+        :return: raises a UniquenessError exception when there is an entry in the session list with a field violating the
         uniqueness constraints
         """
-        for db_session in self.sessions:
-            # Validate session ID uniqueness
-            if str(db_session["id"]) == str(session_id):
-                raise ValueError("session id must be unique")
+        if self.lookup_by_id(db_session, session_id):
+            raise UniquenessError("user id must be unique")
 
-    def lookup_by_id(self, session_id: str) -> dict | None:
-        for session in self.sessions:
-            if str(session.get("id")) == session_id:
-                return session
+    def lookup_by_id(self, db_session: DbSessionDep, session_id: UUID):
+        """
+        Queries the session with the provided ID
+        :param db_session: database session object
+        :param session_id: target session ID
+        :return: the session record matching the provided ID. It returns None if no such object exists
+        """
+        auth_session = db_session.get(AuthSession, session_id)
+        if auth_session:
+            return auth_session
 
         return None
 
-    def insert(self, user_id: str) -> UUID:
+    def insert(self, db_session: DbSessionDep, user_id: UUID) -> UUID:
+        """
+        Creates and inserts a session object associated with the provided user ID
+        :param db_session: database session object
+        :param user_id: ID of the user owning the session and, therefore, authenticated in the app
+        :return: the ID of the created session (to be used to authenticate the user)
+        """
         session_id = uuid4()
 
-        self.__validate_session_id_uniqueness_constraint(session_id)
+        self.__validate_session_id_uniqueness_constraint(db_session, session_id)
 
         created_at = datetime.now()
-
-        self.sessions.append({
-            "id": session_id,
-            "user_id": user_id,
-            "created_at": created_at,
-            "expires_at": created_at + timedelta(minutes=SESSION_EXPIRATION_MINUTES),
-        })
+        expires_at = created_at + timedelta(minutes=SESSION_EXPIRATION_MINUTES)
+        auth_session = AuthSession(id=session_id, user_id=user_id, created_at=created_at, expires_at=expires_at)
+        db_session.add(auth_session)
+        db_session.commit()
 
         return session_id
 
 
 class InMemUserStorage:
     def __init__(self):
-        self.users: list[dict] = []
         self.password_hash = PasswordHash.recommended()
 
     def verify_password(self, plain_password, hashed_password):
@@ -59,168 +94,171 @@ class InMemUserStorage:
     def __get_password_hash(self, password):
         return self.password_hash.hash(password)
 
-    def validate_id_uniqueness_constraint(self, user: User):
-        """
-        Validates that there is no users in the list with an ID value matching the provided user instance
-        :param user: target user instance
-        :return: raises a ValueError exception when there is an entry in the users list with a field violating the
-        uniqueness constraints
-        """
-        for db_user in self.users:
-            # Validate user ID uniqueness
-            if str(db_user["id"]) == str(user.id):
-                raise ValueError("user id must be unique")
-
-    def validate_email_uniqueness_constraint(self, user: User):
-        """
-        Validates that there is no users in the list with an email value matching the provided user instance
-        :param user: target user instance
-        :return: raises a ValueError exception when there is an entry in the users list with a field violating the
-        uniqueness constraints
-        """
-        for db_user in self.users:
-            # Validate user email uniqueness
-            if db_user["email"] == user.email:
-                raise ValueError("user email must be unique")
-
-    def validate_user_uniqueness_constraints(self, user: User):
+    def validate_user_uniqueness_constraints(self, db_session: DbSessionDep, user: SignupUser):
         """
         Validates that there is no users in the list with an ID or email value matching the provided user instance
+        :param db_session: database session object
         :param user: target user instance
-        :return: raises a ValueError exception when there is an entry in the users list with a field violating the
+        :return: raises a UniquenessError exception when there is an entry in the users list with a field violating the
         uniqueness constraints
         """
-        self.validate_id_uniqueness_constraint(user)
-        self.validate_email_uniqueness_constraint(user)
+        if self.lookup_by_id(db_session, user.id):
+            raise UniquenessError("user id must be unique")
 
-    def lookup_by_email(self, email: str) -> dict | None:
+        try:
+            self.lookup_by_email(db_session, user.email)
+        except NoResultFound:
+            return
+
+        raise UniquenessError("user email must be unique")
+
+    def lookup_by_email(self, db_session: DbSessionDep, email: str) -> User | None:
         """
         Searches for a user with the provided email.
+        :param db_session: database session object
         :param email: target email
         :return: returns the user with a matching email or None if there is no such a user
         """
-        for user in self.users:
-            if user.get("email") == email:
-                return user.copy()
+        stmt = select(User).where(User.email == email)
+        results = db_session.exec(stmt)
+
+        if results:
+            # Because of the uniqueness constraint, we know that only a single record is returned, if any is returned
+            return results.one()
 
         return None
 
-    def lookup_by_id(self, user_id: str) -> dict | None:
+    def lookup_by_id(self, db_session: DbSessionDep, user_id: UUID):
         """
         Searches for a user with the provided ID.
+        :param db_session: database session object
         :param user_id: target user ID
         :return: returns the user with a matching ID or None if there is no such a user
         """
-        for user in self.users:
-            if str(user.get("id")) == user_id:
-                return user.copy()
+        user = db_session.get(User, user_id)
+
+        if user:
+            return user
 
         return None
 
-    def insert(self, user: SignupUser):
-        user_dict = user.model_dump()
+    def insert(self, db_session: DbSessionDep, user: SignupUser):
+        """
+        Creates a user in the database with the provided signup data.
+        :param db_session: database session object
+        :param user: signup data
+        :return: the created user
+        """
         # Hash password before inserting into the database
-        user_dict["password"] = self.__get_password_hash(user_dict["password"])
-        self.users.append(user_dict)
+        user.password = self.__get_password_hash(user.password)
+        # Validate the user model
+        user_db = User.model_validate(user)
+        # Insert the user into the database
+        db_session.add(user_db)
+        db_session.commit()
+        db_session.refresh(user_db)
+        return user_db
 
-    def update(self, user: User, user_id: str) -> bool:
+    def update(self, db_session: DbSessionDep, user: UserBase, existing_user: User) -> User:
         """
-        Update the user in the list matching the provided ID, except for the password.
+        Patches the data of an existing user with the input data
+        :param db_session: database session object
         :param user: new representation of the user (excluding the password).
-        :param user_id: ID of the link to be updated.
-        :return: if an item with a matching ID was found in the list.
+        :param existing_user: user to be updated.
+        :return: the updated user.
         """
-        n = len(self.users)
+        user_data = user.model_dump()
+        existing_user.sqlmodel_update(user_data)
+        db_session.add(existing_user)
+        db_session.commit()
+        db_session.refresh(existing_user)
+        return existing_user
 
-        for i in range(n):
-            if str(self.users[i].get("id")) == user_id:
-                user_dict = user.model_dump()
-                # The ID must not be modified post-creation since it is typically a read-only field
-                user_dict["id"] = self.users[i].get("id")
-                # The password is not in the scope of this method
-                user_dict["password"] = self.users[i].get("password")
-                self.users[i] = user_dict
-                return True
-
-        return False
-
-    def delete(self, user_id: str) -> bool:
+    def delete(self, db_session: DbSessionDep, user: User):
         """
-        Deletes the item with the matching ID from the list.
-        :param user_id: target user ID
-        :return: a boolean indicating if an item with the target ID was found
+        Deletes the specified user from the database.
+        :param db_session: database session object
+        :param user: user to be deleted
         """
-        n = len(self.users)
-
-        for i in range(n):
-            if str(self.users[i].get("id")) == user_id:
-                del self.users[i]
-                return True
-
-        return False
+        db_session.delete(user)
+        db_session.commit()
 
 
 class InMemLinkStorage:
-    def __init__(self):
-        self.links: list[dict] = []
-
-    def validate_link_id_uniqueness(self, link_id: str):
+    def validate_link_id_uniqueness(self, db_session: DbSessionDep, link_id: UUID):
         """
         Validates that there is no links in the list with an ID value matching the provided link_id
+        :param db_session: database session object
         :param link_id: target link_id to validate
-        :return: raises a ValueError exception when there is an entry in the links list with a matching ID
+        :return: raises a UniquenessError exception when there is an entry in the links list with a matching ID
         """
-        for link in self.links:
-            if str(link["id"]) == link_id:
-                raise ValueError("link id must be unique")
+        if self.lookup_by_id(db_session, link_id):
+            raise UniquenessError("link id must be unique")
 
-    def lookup_by_user_id(self, user_id: str) -> list[dict]:
-        links_owned_by_user = []
+    def lookup_by_id(self, db_session: DbSessionDep, link_id: UUID):
+        """
+        Queries the database for a link with the provided ID
+        :param db_session: database session object
+        :param link_id: target link ID
+        :return: the link entity with the provided ID. Returns None if there is no such entity
+        """
+        link = db_session.get(Link, link_id)
 
-        for link in self.links:
-            if str(link["user_id"]) == user_id:
-                links_owned_by_user.append(link.copy())
+        if link:
+            return link
 
-        return links_owned_by_user
+        return None
 
-    def insert(self, link: Link, user_id: str):
-        link_dict = link.model_dump()
-        link_dict["user_id"] = user_id
-        self.links.append(link_dict)
+    def lookup_by_user_id(self, db_session: DbSessionDep, user_id: UUID):
+        """
+        Queries the database for all link owned by the user with the provided IDs
+        :param db_session: database session object
+        :param user_id: target user ID
+        :return: the link entities owned by the provided user. Returns None if there is no such entity
+        """
+        stmt = select(Link).join(User).where(User.id == user_id)
+        results = db_session.exec(stmt)
+        return results.all()
 
-    def update(self, link: Link, link_id: str, user_id: str) -> bool:
+    def insert(self, db_session: DbSessionDep, link: Link, user: User):
+        """
+        Creates a link with the provided data into the database.
+        :param db_session: database session object
+        :param link: link to be inserted
+        :param user: user that is authenticated
+        :return: the user that was inserted into the database
+        """
+        # Validate the link model
+        link_db = Link.model_validate(link, update={
+            "user": user,
+            "user_id": user.id,
+        })
+        db_session.add(link_db)
+        # Insert the link into the database
+        db_session.commit()
+        db_session.refresh(link_db)
+        return link_db
+
+    def update(self, db_session: DbSessionDep, link: LinkBase, existing_link: Link):
         """
         Update the link in the list matching the provided ID.
-        :param link: new representation of the link.
-        :param link_id: ID of the link to be updated.
-        :param user_id: ID of the user that owns the link.
+        :param db_session: database session object
+        :param link: new representation of the link
+        :param existing_link: existing link
         :return: if an item with a matching ID was found in the list.
         """
-        n = len(self.links)
+        link_data = link.model_dump()
+        existing_link.sqlmodel_update(link_data)
+        db_session.add(existing_link)
+        db_session.commit()
+        db_session.refresh(existing_link)
+        return existing_link
 
-        for i in range(n):
-            if (str(self.links[i].get("id")) == link_id) and (str(self.links[i].get("user_id")) == user_id):
-                link_dict = link.model_dump()
-                # The ID must not be modified post-creation since it is typically a read-only field
-                link_dict["id"] = self.links[i].get("id")
-                link_dict["user_id"] = self.links[i].get("user_id")
-                self.links[i] = link_dict
-                return True
-
-        return False
-
-    def delete(self, link_id: str, user_id: str) -> bool:
+    def delete(self, db_session: DbSessionDep, link: Link):
         """
-        Deletes the item with the matching ID from the li
-        :param link_id: target link IDst.
-        :param user_id: ID of the user that owns the link.
-        :return: a boolean indicating if an item with the target ID was found
+        Deletes the specified link
+        :param db_session: database session object
+        :param link: link to be deleted
         """
-        n = len(self.links)
-
-        for i in range(n):
-            if (str(self.links[i].get("id")) == link_id) and (str(self.links[i].get("user_id")) == user_id):
-                del self.links[i]
-                return True
-
-        return False
+        db_session.delete(link)
+        db_session.commit()

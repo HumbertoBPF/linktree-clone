@@ -137,7 +137,6 @@ def create_link():
 
     # Missing name (required field)
     payload = {
-        "id": LINK_ID,
         "url": "https://medium.com/@humbertofilho_30158",
         "description": "My Medium blog, where I write programming-related articles and tutorials"
     }
@@ -164,14 +163,13 @@ def create_link():
 
     assert response.status_code == 409
     assert response.json() == {
-        "error": "link id must be unique"
+        "detail": "link id must be unique"
     }
 
 
 def put_link():
     # Successful update
     payload = {
-        "id": LINK_ID,
         "name": "Medium (updated)",
         "url": "https://medium.com/@humbertofilho_30158",
         "description": "My Medium blog, where I write programming-related articles and tutorials"
@@ -182,28 +180,70 @@ def put_link():
     })
     print("Status code =", response.status_code, "response body =", response.json())
 
-    # The response contains the owner user ID
+    # The response contains the link ID and the owner user ID
+    payload["id"] = LINK_ID
     payload["user_id"] = USER_1_ID
+
+    # Successful update without description
+    payload = {
+        "name": "Medium (updated without description)",
+        "url": "https://medium.com/@humbertofilho_30158"
+    }
+
+    response = requests.put(f"{BASE_URL}/link/{LINK_ID}", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
+    print("Status code =", response.status_code, "response body =", response.json())
+
+    # The response contains the link ID and the owner user ID
+    payload["id"] = LINK_ID
+    payload["user_id"] = USER_1_ID
+    payload["description"] = None
 
     assert response.status_code == 200
     assert response.json() == payload
 
+    # Failing update (no name specified)
+    payload = {
+        "url": "https://medium.com/@humbertofilho_30158",
+        "description": "My Medium blog, where I write programming-related articles and tutorials"
+    }
+
+    response = requests.put(f"{BASE_URL}/link/{LINK_ID}", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
+    print("Status code =", response.status_code, "response body =", response.json())
+
+    assert response.status_code == 422
+
+    # Failing update (no url specified)
+    payload = {
+        "name": "Medium (updated)",
+        "description": "My Medium blog, where I write programming-related articles and tutorials"
+    }
+
+    response = requests.put(f"{BASE_URL}/link/{LINK_ID}", json=payload, headers={
+        "Authorization": f"Bearer {get_user_1_sid()}"
+    })
+    print("Status code =", response.status_code, "response body =", response.json())
+
+    assert response.status_code == 422
+
     # Not found link
     payload = {
-        "id": LINK_ID,
         "name": "Medium (updated)",
         "url": "https://medium.com/@humbertofilho_30158",
         "description": "My Medium blog, where I write programming-related articles and tutorials"
     }
 
-    response = requests.put(f"{BASE_URL}/link/foo", json=payload, headers={
+    response = requests.put(f"{BASE_URL}/link/0d22b3d2-c321-465a-8656-a95d7fd6a096", json=payload, headers={
         "Authorization": f"Bearer {get_user_1_sid()}"
     })
     print("Status code =", response.status_code, "response body =", response.json())
 
     assert response.status_code == 404
     assert response.json() == {
-        "error": "Link not found"
+        "detail": "Link not found"
     }
 
 
@@ -222,7 +262,7 @@ def delete_link():
 
     assert response.status_code == 404
     assert response.json() == {
-        "error": "Link not found"
+        "detail": "Link not found"
     }
 
 
@@ -314,7 +354,7 @@ def create_user():
 
     assert response.status_code == 409
     assert response.json() == {
-        "error": "user id must be unique"
+        "detail": "user id must be unique"
     }
 
     # Request with duplicated user email
@@ -330,7 +370,7 @@ def create_user():
 
     assert response.status_code == 409
     assert response.json() == {
-        "error": "user email must be unique"
+        "detail": "user email must be unique"
     }
 
     # User without first name

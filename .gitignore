@@ -1,8 +1,12 @@
 .idea
 .venv
 **/__pycache__/**
+database.db
 
 # Elastic Beanstalk Files
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
+
+# Environment variables
+.env
