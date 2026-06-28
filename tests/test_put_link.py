@@ -61,6 +61,15 @@ def test_put_link_successful(client, session, faker, test_user):
     assert put_link_response_body["description"] == put_link_payload["description"]
     assert put_link_response_body["user_id"] == test_user["id"]
 
+    # Assert that the update succeeded on a database level
+    updated_link = session.get(Link, uuid.UUID(put_link_response_body["id"]))
+
+    assert updated_link.id == link.id
+    assert updated_link.name == put_link_response_body["name"]
+    assert updated_link.url == put_link_response_body["url"]
+    assert updated_link.description == put_link_response_body["description"]
+    assert str(updated_link.user_id) == test_user["id"]
+
 
 def test_put_link_no_description(client, session, faker, test_user):
     link = Link(
@@ -93,6 +102,15 @@ def test_put_link_no_description(client, session, faker, test_user):
     assert put_link_response_body["url"] == put_link_payload["url"]
     assert put_link_response_body["description"] is None
     assert put_link_response_body["user_id"] == test_user["id"]
+
+    # Assert that the update succeeded on a database level
+    updated_link = session.get(Link, uuid.UUID(put_link_response_body["id"]))
+
+    assert updated_link.id == link.id
+    assert updated_link.name == put_link_payload["name"]
+    assert updated_link.url == put_link_payload["url"]
+    assert updated_link.description is None
+    assert str(updated_link.user_id) == test_user["id"]
 
 
 def test_put_link_no_changes(client, session, faker, test_user):
@@ -128,6 +146,15 @@ def test_put_link_no_changes(client, session, faker, test_user):
     assert put_link_response_body["description"] == link.description
     assert put_link_response_body["user_id"] == test_user["id"]
 
+    # Assert that the update succeeded on a database level
+    updated_link = session.get(Link, uuid.UUID(put_link_response_body["id"]))
+
+    assert updated_link.id == link.id
+    assert updated_link.name == put_link_payload["name"]
+    assert updated_link.url == put_link_payload["url"]
+    assert updated_link.description == put_link_payload["description"]
+    assert str(updated_link.user_id) == test_user["id"]
+
 
 @pytest.mark.parametrize("put_link_payload", [
     # No name
@@ -157,3 +184,12 @@ def test_put_link_unprocessable_content(client, session, faker, test_user, put_l
     })
 
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    # Assert that the update failed on a database level
+    link_after_update = session.get(Link, link.id)
+
+    assert link_after_update.id == link.id
+    assert link_after_update.name == link.name
+    assert link_after_update.url == link.url
+    assert link_after_update.description == link.description
+    assert str(link_after_update.user_id) == test_user["id"]

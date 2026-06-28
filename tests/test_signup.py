@@ -1,8 +1,12 @@
+import uuid
+
 import pytest
 from starlette import status
 
+from model.serialization.model import User
 
-def test_signup(client, faker):
+
+def test_successful_signup(client, session, faker):
     signup_payload = {
         "first_name": faker.first_name(),
         "last_name": faker.last_name(),
@@ -22,8 +26,15 @@ def test_signup(client, faker):
     assert response_body["email"] == signup_payload["email"]
     assert "password" not in response_body
 
+    # Assert that the user was created on the database level
+    created_user = session.get(User, uuid.UUID(response_body["id"]))
 
-def test_signup_with_id(client, faker):
+    assert created_user.first_name == response_body["first_name"]
+    assert created_user.last_name == response_body["last_name"]
+    assert created_user.email == response_body["email"]
+
+
+def test_signup_with_id(client, session, faker):
     signup_payload = {
         "id": faker.uuid4(),
         "first_name": faker.first_name(),
@@ -43,6 +54,13 @@ def test_signup_with_id(client, faker):
     assert response_body["last_name"] == signup_payload["last_name"]
     assert response_body["email"] == signup_payload["email"]
     assert "password" not in response_body
+
+    # Assert that the user was created on the database level
+    created_user = session.get(User, uuid.UUID(response_body["id"]))
+
+    assert created_user.first_name == response_body["first_name"]
+    assert created_user.last_name == response_body["last_name"]
+    assert created_user.email == response_body["email"]
 
 
 def test_signup_with_existing_id(client, faker):

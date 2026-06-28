@@ -46,6 +46,10 @@ def test_delete_link_successful(client, session, faker, test_user):
 
     assert response.status_code == status.HTTP_204_NO_CONTENT
 
+    # Assert that the deletion succeeded on the database level
+    link_after_deletion = session.get(Link, link.id)
+    assert link_after_deletion is None
+
 
 def test_delete_link_not_found(client, faker, test_user):
     response = client.delete(f"/link/{faker.uuid4()}", headers={

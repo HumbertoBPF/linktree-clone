@@ -15,7 +15,7 @@ def test_create_link_unauthorized(client):
     }
 
 
-def test_create_link_successful(client, faker, test_user):
+def test_create_link_successful(client, session, faker, test_user):
     create_link_payload = {
         "name": "Link name",
         "url": faker.url(),
@@ -36,8 +36,16 @@ def test_create_link_successful(client, faker, test_user):
     assert create_link_response_body["description"] == create_link_payload["description"]
     assert create_link_response_body["user_id"] == test_user["id"]
 
+    # Assert that the user was created on the database level
+    created_link = session.get(Link, uuid.UUID(create_link_response_body["id"]))
 
-def test_create_link_successful_with_specific_id(client, faker, test_user):
+    assert created_link.name == create_link_payload["name"]
+    assert created_link.url == create_link_payload["url"]
+    assert created_link.description == create_link_payload["description"]
+    assert str(created_link.user_id) == test_user["id"]
+
+
+def test_create_link_successful_with_specific_id(client, session, faker, test_user):
     create_link_payload = {
         "id": faker.uuid4(),
         "name": "Link name",
@@ -59,8 +67,17 @@ def test_create_link_successful_with_specific_id(client, faker, test_user):
     assert create_link_response_body["description"] == create_link_payload["description"]
     assert create_link_response_body["user_id"] == test_user["id"]
 
+    # Assert that the user was created on the database level
+    created_link = session.get(Link, uuid.UUID(create_link_payload["id"]))
 
-def test_create_link_successful_without_description(client, faker, test_user):
+    assert str(created_link.id) == create_link_payload["id"]
+    assert created_link.name == create_link_payload["name"]
+    assert created_link.url == create_link_payload["url"]
+    assert created_link.description == create_link_payload["description"]
+    assert str(created_link.user_id) == test_user["id"]
+
+
+def test_create_link_successful_without_description(client, session, faker, test_user):
     create_link_payload = {
         "name": "Link name",
         "url": faker.url(),
@@ -79,6 +96,14 @@ def test_create_link_successful_without_description(client, faker, test_user):
     assert create_link_response_body["url"] == create_link_payload["url"]
     assert create_link_response_body["description"] is None
     assert create_link_response_body["user_id"] == test_user["id"]
+
+    # Assert that the user was created on the database level
+    created_link = session.get(Link, uuid.UUID(create_link_response_body["id"]))
+
+    assert created_link.name == create_link_payload["name"]
+    assert created_link.url == create_link_payload["url"]
+    assert created_link.description is None
+    assert str(created_link.user_id) == test_user["id"]
 
 
 def test_create_link_successful_with_existing_id_owned_by_the_same_user(client, session, faker, test_user):

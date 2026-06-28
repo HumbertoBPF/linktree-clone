@@ -1,18 +1,28 @@
+import uuid
+
 import pytest
 from starlette import status
 
+from model.serialization.model import AuthSession
 
-def test_login_random_credentials(client, test_user):
+
+def test_login_random_credentials(client, session, test_user):
     response = client.post("/login", data={
         "username": test_user["email"],
         "password": test_user["password"]
     })
 
     assert response.status_code == status.HTTP_200_OK
-    assert "sid" in response.json()
+
+    login_response = response.json()
+    assert "sid" in login_response
+
+    # Assert that the session was created in the database
+    auth_session = session.get(AuthSession, uuid.UUID(login_response["sid"]))
+    assert str(auth_session.user_id) == test_user["id"]
 
 
-def test_login_known_credentials(client, faker):
+def test_login_known_credentials(client, session, faker):
     signup_payload = {
         "first_name": faker.first_name(),
         "last_name": faker.last_name(),
@@ -24,13 +34,21 @@ def test_login_known_credentials(client, faker):
 
     assert response.status_code == status.HTTP_201_CREATED
 
+    signup_response_body = response.json()
+
     response = client.post("/login", data={
         "username": signup_payload["email"],
         "password": signup_payload["password"]
     })
 
     assert response.status_code == status.HTTP_200_OK
-    assert "sid" in response.json()
+
+    login_response = response.json()
+    assert "sid" in login_response
+
+    # Assert that the session was created in the database
+    auth_session = session.get(AuthSession, uuid.UUID(login_response["sid"]))
+    assert str(auth_session.user_id) == signup_response_body["id"]
 
 
 @pytest.mark.parametrize("login_payload", [
