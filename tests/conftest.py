@@ -6,7 +6,7 @@ from starlette import status
 from starlette.testclient import TestClient
 
 from main import app
-from model.inmem_storage.storage import get_db_session
+from model.storage.storage import get_db_session
 
 
 @pytest.fixture(name="session")

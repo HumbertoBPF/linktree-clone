@@ -11,7 +11,7 @@ from sqlmodel import SQLModel
 from starlette.responses import JSONResponse
 
 from exceptions.exceptions import UniquenessError
-from model.inmem_storage.storage import InMemLinkStorage, InMemUserStorage, InMemSessionStorage, engine, DbSessionDep
+from model.storage.storage import InMemLinkStorage, InMemUserStorage, InMemSessionStorage, engine, DbSessionDep
 from model.serialization.model import Link, SignupUser, User, PublicUser, UserBase, LinkBase
 from validation.validation import validate_password
 

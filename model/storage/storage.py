@@ -19,13 +19,13 @@ SESSION_EXPIRATION_MINUTES = 60
 load_dotenv()
 
 # Access them normally
-MYSQL_USERNAME = os.getenv("MYSQL_USERNAME")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
-MYSQL_IP_ADDRESS = os.getenv("MYSQL_IP_ADDRESS")
-MYSQL_PORT = os.getenv("MYSQL_PORT")
-MYSQL_DATABASE_NAME = os.getenv("MYSQL_DATABASE_NAME")
+RDS_USERNAME = os.getenv("RDS_USERNAME")
+RDS_PASSWORD = os.getenv("RDS_PASSWORD")
+RDS_HOSTNAME = os.getenv("RDS_HOSTNAME")
+RDS_PORT = os.getenv("RDS_PORT")
+RDS_DB_NAME = os.getenv("RDS_DB_NAME")
 
-mysql_url = f"mysql+pymysql://{MYSQL_USERNAME}:{MYSQL_PASSWORD}@{MYSQL_IP_ADDRESS}:{MYSQL_PORT}/{MYSQL_DATABASE_NAME}"
+mysql_url = f"mysql+pymysql://{RDS_USERNAME}:{RDS_PASSWORD}@{RDS_HOSTNAME}:{RDS_PORT}/{RDS_DB_NAME}"
 
 engine = create_engine(mysql_url)
 
